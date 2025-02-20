@@ -803,20 +803,18 @@ pub struct IdentifierWithSpan {
     span: Option<Span>,
 }
 
-impl Into<IdentifierWithSpan> for &str {
-    fn into(self) -> IdentifierWithSpan {
+impl From<&str> for IdentifierWithSpan {
+    fn from(value: &str) -> Self {
         IdentifierWithSpan {
-            value: self.to_owned(),
+            value: value.to_owned(),
             span: None,
         }
     }
 }
-impl Into<IdentifierWithSpan> for String {
-    fn into(self) -> IdentifierWithSpan {
-        IdentifierWithSpan {
-            value: self,
-            span: None,
-        }
+
+impl From<String> for IdentifierWithSpan {
+    fn from(value: String) -> Self {
+        IdentifierWithSpan { value, span: None }
     }
 }
 
@@ -835,7 +833,7 @@ impl<'a> From<&tree_sitter::Node<'a>> for Span {
     }
 }
 impl<'de> Deserialize<'de> for Span {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
@@ -938,10 +936,10 @@ impl PartialEq for IdentifierRef<'_> {
                 a.value.to_lowercase() == b.value.to_lowercase()
             }
             (IdentifierRef::Quoted(a), IdentifierRef::Unquoted(b)) => {
-                &a.value == &b.value.to_lowercase()
+                a.value == b.value.to_lowercase()
             }
             (IdentifierRef::Unquoted(a), IdentifierRef::Quoted(b)) => {
-                &a.value.to_lowercase() == &b.value
+                a.value.to_lowercase() == b.value
             }
         }
     }
@@ -1100,7 +1098,7 @@ mod tests {
         let name = FQName::parse("myId.Name");
         assert_eq!(FQName::new("myId", None, "Name", None), name);
         assert_eq!(
-            Some(Identifier::Unquoted("MyId".to_string().into()).into()),
+            Some(Identifier::Unquoted("MyId".to_string().into())),
             name.keyspace
         );
         assert_eq!(Identifier::Unquoted("Name".to_string().into()), name.name);
@@ -1108,7 +1106,7 @@ mod tests {
         let name = FQName::parse("\"myId\".Name");
         assert_eq!(FQName::new("\"myId\"", None, "Name", None), name);
         assert_eq!(
-            Some(Identifier::Quoted("myId".to_string().into()).into()),
+            Some(Identifier::Quoted("myId".to_string().into())),
             name.keyspace
         );
         assert_eq!(Identifier::Unquoted("Name".to_string().into()), name.name);
