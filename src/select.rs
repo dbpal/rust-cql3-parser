@@ -1,4 +1,4 @@
-use crate::common::{FQName, Identifier, OrderClause, RelationElement};
+use crate::common::{FQName, Identifier, OrderClause, RelationElement, Span};
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
 
@@ -111,16 +111,21 @@ pub struct Named {
 
 /// the name an optional alias for a named item.
 impl Named {
-    pub fn new(name: &str, alias: &str) -> Named {
+    pub fn new(
+        name: &str,
+        name_span: Option<Span>,
+        alias: &str,
+        alias_span: Option<Span>,
+    ) -> Named {
         Named {
-            name: Identifier::parse(name),
-            alias: Some(Identifier::parse(alias)),
+            name: Identifier::parse(name, name_span),
+            alias: Some(Identifier::parse(alias, alias_span)),
         }
     }
 
-    pub fn simple(name: &str) -> Named {
+    pub fn simple(name: &str, span: Option<Span>) -> Named {
         Named {
-            name: Identifier::parse(name),
+            name: Identifier::parse(name, span),
             alias: None,
         }
     }
@@ -151,19 +156,19 @@ mod tests {
         assert_eq!("*", SelectElement::Star.to_string());
         assert_eq!(
             "col",
-            SelectElement::Column(Named::simple("col")).to_string()
+            SelectElement::Column(Named::simple("col", None)).to_string()
         );
         assert_eq!(
             "func",
-            SelectElement::Function(Named::simple("func")).to_string()
+            SelectElement::Function(Named::simple("func", None)).to_string()
         );
         assert_eq!(
             "col AS alias",
-            SelectElement::Column(Named::new("col", "alias")).to_string()
+            SelectElement::Column(Named::new("col", None, "alias", None)).to_string()
         );
         assert_eq!(
             "func AS alias",
-            SelectElement::Function(Named::new("func", "alias")).to_string()
+            SelectElement::Function(Named::new("func", None, "alias", None)).to_string()
         );
     }
 }

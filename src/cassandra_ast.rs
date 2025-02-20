@@ -8,7 +8,7 @@ use crate::cassandra_statement::CassandraStatement;
 use crate::common::{
     ColumnDefinition, DataType, DataTypeName, FQName, Identifier, Operand, OptionValue,
     OrderClause, PrimaryKey, Privilege, PrivilegeType, RelationElement, RelationOperator, Resource,
-    TtlTimestamp, WithItem,
+    Span, TtlTimestamp, WithItem,
 };
 use crate::common_drop::CommonDrop;
 use crate::create_function::CreateFunction;
@@ -50,7 +50,7 @@ impl NodeFuncs {
 pub struct CassandraParser {}
 impl CassandraParser {
     pub fn parse_identifier(node: &Node, source: &str) -> Identifier {
-        Identifier::parse(NodeFuncs::as_str(node, source))
+        Identifier::parse(NodeFuncs::as_str(node, source), Some(Span::from(node)))
     }
 
     pub fn parse_truncate(node: &Node, source: &str) -> FQName {
@@ -68,7 +68,11 @@ impl CassandraParser {
         cursor.goto_first_child();
         // consume 'USE'
         cursor.goto_next_sibling();
-        Identifier::parse(NodeFuncs::as_str(&cursor.node(), source))
+
+        Identifier::parse(
+            NodeFuncs::as_str(&cursor.node(), source),
+            Some(Span::from(&cursor.node())),
+        )
     }
 
     /// parse the alter materialized view command
@@ -819,7 +823,10 @@ impl CassandraParser {
             name: {
                 let mut nm = None;
                 if cursor.node().kind() == "short_index_name" {
-                    nm = Some(Identifier::parse(NodeFuncs::as_str(&cursor.node(), source)));
+                    nm = Some(Identifier::parse(
+                        NodeFuncs::as_str(&cursor.node(), source),
+                        Some(Span::from(&cursor.node())),
+                    ));
                     cursor.goto_next_sibling();
                 }
                 nm
@@ -1470,10 +1477,12 @@ impl CassandraParser {
             cursor.goto_next_sibling();
             FQName::new(
                 NodeFuncs::as_str(result, source),
+                Some(Span::from(result)),
                 NodeFuncs::as_str(&cursor.node(), source),
+                Some(Span::from(&cursor.node())),
             )
         } else {
-            FQName::simple(NodeFuncs::as_str(result, source))
+            FQName::simple(NodeFuncs::as_str(result, source), Some(Span::from(result)))
         }
     }
 
@@ -1934,18 +1943,24 @@ impl CassandraParser {
         match (type_.kind(), alias) {
             ("column", Some(alias)) => SelectElement::Column(Named::new(
                 NodeFuncs::as_str(&type_, source),
+                Some(Span::from(&type_)),
                 NodeFuncs::as_str(&alias, source),
+                Some(Span::from(&alias)),
             )),
-            ("column", None) => {
-                SelectElement::Column(Named::simple(NodeFuncs::as_str(&type_, source)))
-            }
+            ("column", None) => SelectElement::Column(Named::simple(
+                NodeFuncs::as_str(&type_, source),
+                Some(Span::from(&type_)),
+            )),
             ("function_call", Some(alias)) => SelectElement::Function(Named::new(
                 NodeFuncs::as_str(&type_, source),
+                Some(Span::from(&type_)),
                 NodeFuncs::as_str(&alias, source),
+                Some(Span::from(&alias)),
             )),
-            ("function_call", None) => {
-                SelectElement::Function(Named::simple(NodeFuncs::as_str(&type_, source)))
-            }
+            ("function_call", None) => SelectElement::Function(Named::simple(
+                NodeFuncs::as_str(&type_, source),
+                Some(Span::from(&type_)),
+            )),
             _ => unreachable!(),
         }
     }

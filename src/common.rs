@@ -3,6 +3,7 @@ use bytes::Bytes;
 use hex;
 use itertools::Itertools;
 use num_bigint::BigInt;
+
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Display, Formatter};
@@ -707,23 +708,28 @@ impl FQName {
     pub fn parse(txt: &str) -> FQName {
         let parts = txt.split('.').collect_vec();
         if parts.len() > 1 {
-            FQName::new(parts[0], parts[1])
+            FQName::new(parts[0], None, parts[1], None)
         } else {
-            FQName::simple(txt)
+            FQName::simple(txt, None)
         }
     }
 
-    pub fn simple(name: &str) -> FQName {
+    pub fn simple(name: &str, span: Option<Span>) -> FQName {
         FQName {
             keyspace: None,
-            name: Identifier::parse(name),
+            name: Identifier::parse(name, span),
         }
     }
 
-    pub fn new(keyspace: &str, name: &str) -> FQName {
+    pub fn new(
+        keyspace: &str,
+        keyspace_span: Option<Span>,
+        name: &str,
+        name_span: Option<Span>,
+    ) -> FQName {
         FQName {
-            keyspace: Some(Identifier::parse(keyspace)),
-            name: Identifier::parse(name),
+            keyspace: Some(Identifier::parse(keyspace, keyspace_span)),
+            name: Identifier::parse(name, name_span),
         }
     }
 }
@@ -784,13 +790,58 @@ impl PartialEq<FQNameRef<'_>> for FQName {
 pub enum Identifier {
     /// This variant is case sensitive
     /// "fOo""bAr""" is stored as fOo"bAr"
-    Quoted(String),
+    Quoted(IdentifierWithSpan),
     /// This variant is case insensitive
     /// Only ascii alphanumeric and _ characters are allowed in this variant
     /// fOo_bAr is stored as fOo_bAr
-    Unquoted(String),
+    Unquoted(IdentifierWithSpan),
 }
 
+#[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, Deserialize, Hash)]
+pub struct IdentifierWithSpan {
+    value: String,
+    span: Option<Span>,
+}
+
+impl Into<IdentifierWithSpan> for &str {
+    fn into(self) -> IdentifierWithSpan {
+        IdentifierWithSpan {
+            value: self.to_owned(),
+            span: None,
+        }
+    }
+}
+impl Into<IdentifierWithSpan> for String {
+    fn into(self) -> IdentifierWithSpan {
+        IdentifierWithSpan {
+            value: self,
+            span: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
+pub struct Span {
+    pub start: tree_sitter::Point,
+    pub end: tree_sitter::Point,
+}
+
+impl<'a> From<&tree_sitter::Node<'a>> for Span {
+    fn from(value: &tree_sitter::Node<'a>) -> Self {
+        Self {
+            start: value.start_position(),
+            end: value.end_position(),
+        }
+    }
+}
+impl<'de> Deserialize<'de> for Span {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        todo!()
+    }
+}
 impl Identifier {
     /// parses strings as returned by the parser into Quoted or Unquoted Identifiers.
     ///  * Unquoted Identifiers:  are case insensitive
@@ -799,14 +850,20 @@ impl Identifier {
     ///
     /// If the string starts with `"` it is assumed to be a quoted identifier, the leading and trailing quotes are removed
     /// and the internal doubled quotes (`""`) are converted to simple quotes (`"`).
-    pub fn parse(text: &str) -> Identifier {
+    pub fn parse(text: &str, span: Option<Span>) -> Identifier {
         if text.starts_with('"') {
             let mut chars = text.chars();
             chars.next();
             chars.next_back();
-            Identifier::Quoted(chars.as_str().replace("\"\"", "\""))
+            Identifier::Quoted(IdentifierWithSpan {
+                value: chars.as_str().replace("\"\"", "\""),
+                span,
+            })
         } else {
-            Identifier::Unquoted(text.to_string())
+            Identifier::Unquoted(IdentifierWithSpan {
+                value: text.to_string(),
+                span,
+            })
         }
     }
 
@@ -827,8 +884,8 @@ impl PartialEq for Identifier {
 impl Hash for Identifier {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
-            Identifier::Quoted(a) => a.hash(state),
-            Identifier::Unquoted(a) => a.to_lowercase().hash(state),
+            Identifier::Quoted(a) => a.value.hash(state),
+            Identifier::Unquoted(a) => a.value.to_lowercase().hash(state),
         }
     }
 }
@@ -836,27 +893,27 @@ impl Hash for Identifier {
 impl Display for Identifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
-            Identifier::Quoted(txt) => write!(f, "\"{}\"", txt.replace('\"', "\"\"")),
-            Identifier::Unquoted(txt) => write!(f, "{}", txt),
+            Identifier::Quoted(txt) => write!(f, "\"{}\"", txt.value.replace('\"', "\"\"")),
+            Identifier::Unquoted(txt) => write!(f, "{}", txt.value),
         }
     }
 }
 
 impl Default for Identifier {
     fn default() -> Self {
-        Identifier::Unquoted("".to_string())
+        Identifier::Unquoted("".to_string().into())
     }
 }
 
 impl From<&str> for Identifier {
     fn from(txt: &str) -> Self {
-        Identifier::parse(txt)
+        Identifier::parse(txt, None)
     }
 }
 
 impl From<&String> for Identifier {
     fn from(txt: &String) -> Self {
-        Identifier::parse(txt)
+        Identifier::parse(txt, None)
     }
 }
 
@@ -866,11 +923,11 @@ impl From<&String> for Identifier {
 pub enum IdentifierRef<'a> {
     /// This variant is case sensitive
     /// "fOo""bAr""" is stored as fOo"bAr"
-    Quoted(&'a str),
+    Quoted(&'a IdentifierWithSpan),
     /// This variant is case insensitive
     /// Only ascii alphanumeric and _ characters are allowed in this variant
     /// fOo_bAr is stored as fOo_bAr
-    Unquoted(&'a str),
+    Unquoted(&'a IdentifierWithSpan),
 }
 
 impl PartialEq for IdentifierRef<'_> {
@@ -878,10 +935,14 @@ impl PartialEq for IdentifierRef<'_> {
         match (self, other) {
             (IdentifierRef::Quoted(a), IdentifierRef::Quoted(b)) => a == b,
             (IdentifierRef::Unquoted(a), IdentifierRef::Unquoted(b)) => {
-                a.to_lowercase() == b.to_lowercase()
+                a.value.to_lowercase() == b.value.to_lowercase()
             }
-            (IdentifierRef::Quoted(a), IdentifierRef::Unquoted(b)) => a == &b.to_lowercase(),
-            (IdentifierRef::Unquoted(a), IdentifierRef::Quoted(b)) => &a.to_lowercase() == b,
+            (IdentifierRef::Quoted(a), IdentifierRef::Unquoted(b)) => {
+                &a.value == &b.value.to_lowercase()
+            }
+            (IdentifierRef::Unquoted(a), IdentifierRef::Quoted(b)) => {
+                &a.value.to_lowercase() == &b.value
+            }
         }
     }
 }
@@ -956,10 +1017,10 @@ mod tests {
         ];
 
         for (arg, expected) in args {
-            let x = Identifier::parse(arg);
+            let x = Identifier::parse(arg, None);
             assert_eq!(arg, x.to_string());
             if let Identifier::Quoted(txt) = x {
-                assert_eq!(expected, txt);
+                assert_eq!(expected, txt.value);
             } else {
                 panic!("Should  be quoted");
             }
@@ -971,10 +1032,10 @@ mod tests {
         let args = ["just_A_name", "CaseSpecific"];
 
         for arg in args {
-            let x = Identifier::parse(arg);
+            let x = Identifier::parse(arg, None);
             assert_eq!(arg, x.to_string());
             if let Identifier::Unquoted(txt) = x {
-                assert_eq!(arg, txt);
+                assert_eq!(arg, txt.value);
             } else {
                 panic!("Should  be unquoted");
             }
@@ -984,6 +1045,7 @@ mod tests {
     fn assert_identifier_equality(left: &Identifier, right: &Identifier) {
         assert_eq!(left, right);
         assert_eq!(right, left);
+        println!("!!!!!!!!!!!!!!!!!!!{:?} {:?}", left, right);
         let mut left_hasher = DefaultHasher::new();
         left.hash(&mut left_hasher);
 
@@ -999,13 +1061,13 @@ mod tests {
 
     #[test]
     pub fn test_identifier_equality() {
-        let lower_case_unquoted = Identifier::Unquoted("myid".to_string());
-        let mixed_case_unquoted = Identifier::Unquoted("myId".to_string());
-        let lower_case_quoted = Identifier::Quoted("myid".to_string());
-        let mixed_case_quoted = Identifier::Quoted("MyId".to_string());
+        let lower_case_unquoted = Identifier::Unquoted("myid".to_string().into());
+        let mixed_case_unquoted = Identifier::Unquoted("myId".to_string().into());
+        let lower_case_quoted = Identifier::Quoted("myid".to_string().into());
+        let mixed_case_quoted = Identifier::Quoted("MyId".to_string().into());
 
-        let quote_in_unquoted = Identifier::Unquoted("\"now\"".to_string());
-        let quote_in_quoted = Identifier::Quoted("\"now\"".to_string());
+        let quote_in_unquoted = Identifier::Unquoted("\"now\"".to_string().into());
+        let quote_in_quoted = Identifier::Quoted("\"now\"".to_string().into());
 
         assert_identifier_equality(&lower_case_unquoted, &mixed_case_unquoted);
 
@@ -1020,34 +1082,43 @@ mod tests {
     #[test]
     pub fn test_fqname_parse() {
         let name = FQName::parse("myid");
-        assert_eq!(FQName::simple("myid"), name);
+        assert_eq!(FQName::simple("myid", None), name);
 
         let name = FQName::parse("myId");
-        assert_eq!(FQName::simple("myId"), name);
-        assert_eq!(Identifier::Unquoted("myId".to_string()), name.name);
+        assert_eq!(FQName::simple("myId", None), name);
+        assert_eq!(Identifier::Unquoted("myId".to_string().into()), name.name);
 
         let name = FQName::parse(r#""myId""#);
-        assert_eq!(FQName::simple("\"myId\""), name);
-        assert_eq!(Identifier::Quoted("myId".to_string()), name.name);
+        assert_eq!(FQName::simple("\"myId\"", None), name);
+        assert_eq!(Identifier::Quoted("myId".to_string().into()), name.name);
 
-        assert_eq!(FQName::new("myid", "name"), FQName::parse("myid.name"));
+        assert_eq!(
+            FQName::new("myid", None, "name", None),
+            FQName::parse("myid.name")
+        );
 
         let name = FQName::parse("myId.Name");
-        assert_eq!(FQName::new("myId", "Name"), name);
+        assert_eq!(FQName::new("myId", None, "Name", None), name);
         assert_eq!(
-            Some(Identifier::Unquoted("MyId".to_string())),
+            Some(Identifier::Unquoted("MyId".to_string().into()).into()),
             name.keyspace
         );
-        assert_eq!(Identifier::Unquoted("Name".to_string()), name.name);
+        assert_eq!(Identifier::Unquoted("Name".to_string().into()), name.name);
 
         let name = FQName::parse("\"myId\".Name");
-        assert_eq!(FQName::new("\"myId\"", "Name"), name);
-        assert_eq!(Some(Identifier::Quoted("myId".to_string())), name.keyspace);
-        assert_eq!(Identifier::Unquoted("Name".to_string()), name.name);
+        assert_eq!(FQName::new("\"myId\"", None, "Name", None), name);
+        assert_eq!(
+            Some(Identifier::Quoted("myId".to_string().into()).into()),
+            name.keyspace
+        );
+        assert_eq!(Identifier::Unquoted("Name".to_string().into()), name.name);
 
         let name = FQName::parse("\"myId\".\"Name\"");
-        assert_eq!(FQName::new("\"myId\"", "\"Name\""), name);
-        assert_eq!(Some(Identifier::Quoted("myId".to_string())), name.keyspace);
-        assert_eq!(Identifier::Quoted("Name".to_string()), name.name);
+        assert_eq!(FQName::new("\"myId\"", None, "\"Name\"", None), name);
+        assert_eq!(
+            Some(Identifier::Quoted("myId".to_string().into())),
+            name.keyspace
+        );
+        assert_eq!(Identifier::Quoted("Name".to_string().into()), name.name);
     }
 }
