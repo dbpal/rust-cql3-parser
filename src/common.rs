@@ -935,12 +935,8 @@ impl PartialEq for IdentifierRef<'_> {
             (IdentifierRef::Unquoted(a), IdentifierRef::Unquoted(b)) => {
                 a.to_lowercase() == b.to_lowercase()
             }
-            (IdentifierRef::Quoted(a), IdentifierRef::Unquoted(b)) => {
-                *a == b.to_lowercase().as_str()
-            }
-            (IdentifierRef::Unquoted(a), IdentifierRef::Quoted(b)) => {
-                a.to_lowercase().as_str() == *b
-            }
+            (IdentifierRef::Quoted(a), IdentifierRef::Unquoted(b)) => a == &b.to_lowercase(),
+            (IdentifierRef::Unquoted(a), IdentifierRef::Quoted(b)) => &a.to_lowercase() == b,
         }
     }
 }
