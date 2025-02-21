@@ -867,8 +867,8 @@ impl Identifier {
 
     fn as_ref(&'_ self) -> IdentifierRef<'_> {
         match self {
-            Self::Quoted(x) => IdentifierRef::Quoted(x),
-            Self::Unquoted(x) => IdentifierRef::Unquoted(x),
+            Self::Quoted(x) => IdentifierRef::Quoted(&x.value),
+            Self::Unquoted(x) => IdentifierRef::Unquoted(&x.value),
         }
     }
 }
@@ -921,11 +921,11 @@ impl From<&String> for Identifier {
 pub enum IdentifierRef<'a> {
     /// This variant is case sensitive
     /// "fOo""bAr""" is stored as fOo"bAr"
-    Quoted(&'a IdentifierWithSpan),
+    Quoted(&'a str),
     /// This variant is case insensitive
     /// Only ascii alphanumeric and _ characters are allowed in this variant
     /// fOo_bAr is stored as fOo_bAr
-    Unquoted(&'a IdentifierWithSpan),
+    Unquoted(&'a str),
 }
 
 impl PartialEq for IdentifierRef<'_> {
@@ -933,13 +933,13 @@ impl PartialEq for IdentifierRef<'_> {
         match (self, other) {
             (IdentifierRef::Quoted(a), IdentifierRef::Quoted(b)) => a == b,
             (IdentifierRef::Unquoted(a), IdentifierRef::Unquoted(b)) => {
-                a.value.to_lowercase() == b.value.to_lowercase()
+                a.to_lowercase() == b.to_lowercase()
             }
             (IdentifierRef::Quoted(a), IdentifierRef::Unquoted(b)) => {
-                a.value == b.value.to_lowercase()
+                *a == b.to_lowercase().as_str()
             }
             (IdentifierRef::Unquoted(a), IdentifierRef::Quoted(b)) => {
-                a.value.to_lowercase() == b.value
+                a.to_lowercase().as_str() == *b
             }
         }
     }
