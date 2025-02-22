@@ -865,7 +865,7 @@ impl Identifier {
         }
     }
 
-    fn as_ref(&'_ self) -> IdentifierRef<'_> {
+    pub fn as_ref(&'_ self) -> IdentifierRef<'_> {
         match self {
             Self::Quoted(x) => IdentifierRef::Quoted(&x.value),
             Self::Unquoted(x) => IdentifierRef::Unquoted(&x.value),
