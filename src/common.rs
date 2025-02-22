@@ -871,7 +871,7 @@ impl Identifier {
             Self::Unquoted(x) => IdentifierRef::Unquoted(&x.value),
         }
     }
-    fn span(&self) -> Option<&Span> {
+    pub fn span(&self) -> Option<&Span> {
         match self {
             Identifier::Quoted(identifier_with_span) => identifier_with_span.span.as_ref(),
             Identifier::Unquoted(identifier_with_span) => identifier_with_span.span.as_ref(),
