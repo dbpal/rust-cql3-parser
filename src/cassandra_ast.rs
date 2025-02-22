@@ -2015,10 +2015,10 @@ pub struct ParsedStatement {
     pub statement: CassandraStatement,
     /// the beginning byte of the text for the parsed statement within
     /// the original statement.
-    start_byte: usize,
+    pub start_byte: usize,
     /// the ending byte of the text for the parsed statement within
     /// the original statement.
-    end_byte: usize,
+    pub end_byte: usize,
 }
 
 impl ParsedStatement {
