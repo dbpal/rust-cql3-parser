@@ -799,7 +799,7 @@ pub enum Identifier {
 
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, Deserialize, Hash)]
 pub struct IdentifierWithSpan {
-    value: String,
+    pub value: String,
     span: Option<Span>,
 }
 
