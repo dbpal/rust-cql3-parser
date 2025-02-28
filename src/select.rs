@@ -111,19 +111,14 @@ pub struct Named {
 
 /// the name an optional alias for a named item.
 impl Named {
-    pub fn new(
-        name: &str,
-        name_span: Option<Span>,
-        alias: &str,
-        alias_span: Option<Span>,
-    ) -> Named {
+    pub fn new(name: &str, name_span: Span, alias: &str, alias_span: Span) -> Named {
         Named {
             name: Identifier::parse(name, name_span),
             alias: Some(Identifier::parse(alias, alias_span)),
         }
     }
 
-    pub fn simple(name: &str, span: Option<Span>) -> Named {
+    pub fn simple(name: &str, span: Span) -> Named {
         Named {
             name: Identifier::parse(name, span),
             alias: None,
@@ -149,26 +144,38 @@ impl Display for Named {
 
 #[cfg(test)]
 mod tests {
-    use crate::select::{Named, SelectElement};
+    use crate::select::{Named, SelectElement, Span};
 
     #[test]
     fn test_select_element_display() {
         assert_eq!("*", SelectElement::Star.to_string());
         assert_eq!(
             "col",
-            SelectElement::Column(Named::simple("col", None)).to_string()
+            SelectElement::Column(Named::simple("col", Span::from("col"))).to_string()
         );
         assert_eq!(
             "func",
-            SelectElement::Function(Named::simple("func", None)).to_string()
+            SelectElement::Function(Named::simple("func", Span::from("func"))).to_string()
         );
         assert_eq!(
             "col AS alias",
-            SelectElement::Column(Named::new("col", None, "alias", None)).to_string()
+            SelectElement::Column(Named::new(
+                "col",
+                Span::from("func"),
+                "alias",
+                Span::from("alias")
+            ))
+            .to_string()
         );
         assert_eq!(
             "func AS alias",
-            SelectElement::Function(Named::new("func", None, "alias", None)).to_string()
+            SelectElement::Function(Named::new(
+                "func",
+                Span::from("func"),
+                "alias",
+                Span::from("alias")
+            ))
+            .to_string()
         );
     }
 }

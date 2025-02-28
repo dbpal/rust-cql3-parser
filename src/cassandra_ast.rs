@@ -50,7 +50,7 @@ impl NodeFuncs {
 pub struct CassandraParser {}
 impl CassandraParser {
     pub fn parse_identifier(node: &Node, source: &str) -> Identifier {
-        Identifier::parse(NodeFuncs::as_str(node, source), Some(Span::from(node)))
+        Identifier::parse(NodeFuncs::as_str(node, source), Span::from(node))
     }
 
     pub fn parse_truncate(node: &Node, source: &str) -> FQName {
@@ -71,7 +71,7 @@ impl CassandraParser {
 
         Identifier::parse(
             NodeFuncs::as_str(&cursor.node(), source),
-            Some(Span::from(&cursor.node())),
+            Span::from(&cursor.node()),
         )
     }
 
@@ -825,7 +825,7 @@ impl CassandraParser {
                 if cursor.node().kind() == "short_index_name" {
                     nm = Some(Identifier::parse(
                         NodeFuncs::as_str(&cursor.node(), source),
-                        Some(Span::from(&cursor.node())),
+                        Span::from(&cursor.node()),
                     ));
                     cursor.goto_next_sibling();
                 }
@@ -1477,12 +1477,12 @@ impl CassandraParser {
             cursor.goto_next_sibling();
             FQName::new(
                 NodeFuncs::as_str(result, source),
-                Some(Span::from(result)),
+                Span::from(result),
                 NodeFuncs::as_str(&cursor.node(), source),
-                Some(Span::from(&cursor.node())),
+                Span::from(&cursor.node()),
             )
         } else {
-            FQName::simple(NodeFuncs::as_str(result, source), Some(Span::from(result)))
+            FQName::simple(NodeFuncs::as_str(result, source), Span::from(result))
         }
     }
 
@@ -1943,23 +1943,23 @@ impl CassandraParser {
         match (type_.kind(), alias) {
             ("column", Some(alias)) => SelectElement::Column(Named::new(
                 NodeFuncs::as_str(&type_, source),
-                Some(Span::from(&type_)),
+                Span::from(&type_),
                 NodeFuncs::as_str(&alias, source),
-                Some(Span::from(&alias)),
+                Span::from(&alias),
             )),
             ("column", None) => SelectElement::Column(Named::simple(
                 NodeFuncs::as_str(&type_, source),
-                Some(Span::from(&type_)),
+                Span::from(&type_),
             )),
             ("function_call", Some(alias)) => SelectElement::Function(Named::new(
                 NodeFuncs::as_str(&type_, source),
-                Some(Span::from(&type_)),
+                Span::from(&type_),
                 NodeFuncs::as_str(&alias, source),
-                Some(Span::from(&alias)),
+                Span::from(&alias),
             )),
             ("function_call", None) => SelectElement::Function(Named::simple(
                 NodeFuncs::as_str(&type_, source),
-                Some(Span::from(&type_)),
+                Span::from(&type_),
             )),
             _ => unreachable!(),
         }

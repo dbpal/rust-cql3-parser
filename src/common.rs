@@ -9,6 +9,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::net::IpAddr;
+use tree_sitter::Point;
 use uuid::Uuid;
 
 /// A column definition.
@@ -705,28 +706,23 @@ impl FQName {
     /// parses the FQName from a string.  Breaks the string at the first dot (`.`) and makes the left
     /// string the keyspace and the second string the name. If no dot is present the entire string
     /// is the name.
-    pub fn parse(txt: &str) -> FQName {
-        let parts = txt.split('.').collect_vec();
-        if parts.len() > 1 {
-            FQName::new(parts[0], None, parts[1], None)
-        } else {
-            FQName::simple(txt, None)
-        }
-    }
+    // pub fn parse(txt: &str) -> FQName {
+    //     let parts = txt.split('.').collect_vec();
+    //     if parts.len() > 1 {
+    //         FQName::new(parts[0], None, parts[1], None)
+    //     } else {
+    //         FQName::simple(txt, None)
+    //     }
+    // }
 
-    pub fn simple(name: &str, span: Option<Span>) -> FQName {
+    pub fn simple(name: &str, span: Span) -> FQName {
         FQName {
             keyspace: None,
             name: Identifier::parse(name, span),
         }
     }
 
-    pub fn new(
-        keyspace: &str,
-        keyspace_span: Option<Span>,
-        name: &str,
-        name_span: Option<Span>,
-    ) -> FQName {
+    pub fn new(keyspace: &str, keyspace_span: Span, name: &str, name_span: Span) -> FQName {
         FQName {
             keyspace: Some(Identifier::parse(keyspace, keyspace_span)),
             name: Identifier::parse(name, name_span),
@@ -800,21 +796,37 @@ pub enum Identifier {
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, Deserialize, Hash)]
 pub struct IdentifierWithSpan {
     pub value: String,
-    span: Option<Span>,
+    span: Span,
 }
 
 impl From<&str> for IdentifierWithSpan {
     fn from(value: &str) -> Self {
         IdentifierWithSpan {
             value: value.to_owned(),
-            span: None,
+            span: Span {
+                start: Point { row: 0, column: 1 },
+                end: Point {
+                    row: 0,
+                    column: value.len() - 1,
+                },
+            },
         }
     }
 }
 
 impl From<String> for IdentifierWithSpan {
     fn from(value: String) -> Self {
-        IdentifierWithSpan { value, span: None }
+        let length = value.len();
+        IdentifierWithSpan {
+            value: value,
+            span: Span {
+                start: Point { row: 0, column: 1 },
+                end: Point {
+                    row: 0,
+                    column: length - 1,
+                },
+            },
+        }
     }
 }
 
@@ -832,6 +844,19 @@ impl<'a> From<&tree_sitter::Node<'a>> for Span {
         }
     }
 }
+
+impl From<&str> for Span {
+    fn from(value: &str) -> Self {
+        Self {
+            start: Point { row: 0, column: 0 },
+            end: Point {
+                row: 0,
+                column: value.len() - 1,
+            },
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for Span {
     fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
     where
@@ -848,7 +873,7 @@ impl Identifier {
     ///
     /// If the string starts with `"` it is assumed to be a quoted identifier, the leading and trailing quotes are removed
     /// and the internal doubled quotes (`""`) are converted to simple quotes (`"`).
-    pub fn parse(text: &str, span: Option<Span>) -> Identifier {
+    pub fn parse(text: &str, span: Span) -> Identifier {
         if text.starts_with('"') {
             let mut chars = text.chars();
             chars.next();
@@ -871,10 +896,10 @@ impl Identifier {
             Self::Unquoted(x) => IdentifierRef::Unquoted(&x.value),
         }
     }
-    pub fn span(&self) -> Option<&Span> {
+    pub fn span(&self) -> &Span {
         match self {
-            Identifier::Quoted(identifier_with_span) => identifier_with_span.span.as_ref(),
-            Identifier::Unquoted(identifier_with_span) => identifier_with_span.span.as_ref(),
+            Identifier::Quoted(identifier_with_span) => &identifier_with_span.span,
+            Identifier::Unquoted(identifier_with_span) => &identifier_with_span.span,
         }
     }
 }
@@ -909,17 +934,17 @@ impl Default for Identifier {
     }
 }
 
-impl From<&str> for Identifier {
-    fn from(txt: &str) -> Self {
-        Identifier::parse(txt, None)
-    }
-}
+// impl From<&str> for Identifier {
+//     fn from(txt: &str) -> Self {
+//         Identifier::parse(txt, None)
+//     }
+// }
 
-impl From<&String> for Identifier {
-    fn from(txt: &String) -> Self {
-        Identifier::parse(txt, None)
-    }
-}
+// impl From<&String> for Identifier {
+//     fn from(txt: &String) -> Self {
+//         Identifier::parse(txt, None)
+//     }
+// }
 
 /// An alternative to [Identifier] that holds &str instead of String.
 /// Allows for allocationless comparison of [Identifier].
@@ -961,9 +986,11 @@ impl PartialEq<IdentifierRef<'_>> for Identifier {
 
 #[cfg(test)]
 mod tests {
-    use crate::common::{FQName, Identifier, Operand};
+    use crate::common::{Identifier, Operand};
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
+
+    use super::Span;
 
     #[test]
     pub fn test_operand_unescape() {
@@ -1017,7 +1044,7 @@ mod tests {
         ];
 
         for (arg, expected) in args {
-            let x = Identifier::parse(arg, None);
+            let x = Identifier::parse(arg, Span::from(arg));
             assert_eq!(arg, x.to_string());
             if let Identifier::Quoted(txt) = x {
                 assert_eq!(expected, txt.value);
@@ -1032,7 +1059,7 @@ mod tests {
         let args = ["just_A_name", "CaseSpecific"];
 
         for arg in args {
-            let x = Identifier::parse(arg, None);
+            let x = Identifier::parse(arg, Span::from(arg));
             assert_eq!(arg, x.to_string());
             if let Identifier::Unquoted(txt) = x {
                 assert_eq!(arg, txt.value);
@@ -1045,7 +1072,7 @@ mod tests {
     fn assert_identifier_equality(left: &Identifier, right: &Identifier) {
         assert_eq!(left, right);
         assert_eq!(right, left);
-        println!("!!!!!!!!!!!!!!!!!!!{:?} {:?}", left, right);
+
         let mut left_hasher = DefaultHasher::new();
         left.hash(&mut left_hasher);
 
@@ -1079,46 +1106,46 @@ mod tests {
         assert_identifier_equality(&quote_in_quoted, &quote_in_unquoted);
     }
 
-    #[test]
-    pub fn test_fqname_parse() {
-        let name = FQName::parse("myid");
-        assert_eq!(FQName::simple("myid", None), name);
+    // #[test]
+    // pub fn test_fqname_parse() {
+    //     let name = FQName::parse("myid");
+    //     assert_eq!(FQName::simple("myid", None), name);
 
-        let name = FQName::parse("myId");
-        assert_eq!(FQName::simple("myId", None), name);
-        assert_eq!(Identifier::Unquoted("myId".to_string().into()), name.name);
+    //     let name = FQName::parse("myId");
+    //     assert_eq!(FQName::simple("myId", None), name);
+    //     assert_eq!(Identifier::Unquoted("myId".to_string().into()), name.name);
 
-        let name = FQName::parse(r#""myId""#);
-        assert_eq!(FQName::simple("\"myId\"", None), name);
-        assert_eq!(Identifier::Quoted("myId".to_string().into()), name.name);
+    //     let name = FQName::parse(r#""myId""#);
+    //     assert_eq!(FQName::simple("\"myId\"", None), name);
+    //     assert_eq!(Identifier::Quoted("myId".to_string().into()), name.name);
 
-        assert_eq!(
-            FQName::new("myid", None, "name", None),
-            FQName::parse("myid.name")
-        );
+    //     assert_eq!(
+    //         FQName::new("myid", None, "name", None),
+    //         FQName::parse("myid.name")
+    //     );
 
-        let name = FQName::parse("myId.Name");
-        assert_eq!(FQName::new("myId", None, "Name", None), name);
-        assert_eq!(
-            Some(Identifier::Unquoted("MyId".to_string().into())),
-            name.keyspace
-        );
-        assert_eq!(Identifier::Unquoted("Name".to_string().into()), name.name);
+    //     let name = FQName::parse("myId.Name");
+    //     assert_eq!(FQName::new("myId", None, "Name", None), name);
+    //     assert_eq!(
+    //         Some(Identifier::Unquoted("MyId".to_string().into())),
+    //         name.keyspace
+    //     );
+    //     assert_eq!(Identifier::Unquoted("Name".to_string().into()), name.name);
 
-        let name = FQName::parse("\"myId\".Name");
-        assert_eq!(FQName::new("\"myId\"", None, "Name", None), name);
-        assert_eq!(
-            Some(Identifier::Quoted("myId".to_string().into())),
-            name.keyspace
-        );
-        assert_eq!(Identifier::Unquoted("Name".to_string().into()), name.name);
+    //     let name = FQName::parse("\"myId\".Name");
+    //     assert_eq!(FQName::new("\"myId\"", None, "Name", None), name);
+    //     assert_eq!(
+    //         Some(Identifier::Quoted("myId".to_string().into())),
+    //         name.keyspace
+    //     );
+    //     assert_eq!(Identifier::Unquoted("Name".to_string().into()), name.name);
 
-        let name = FQName::parse("\"myId\".\"Name\"");
-        assert_eq!(FQName::new("\"myId\"", None, "\"Name\"", None), name);
-        assert_eq!(
-            Some(Identifier::Quoted("myId".to_string().into())),
-            name.keyspace
-        );
-        assert_eq!(Identifier::Quoted("Name".to_string().into()), name.name);
-    }
+    //     let name = FQName::parse("\"myId\".\"Name\"");
+    //     assert_eq!(FQName::new("\"myId\"", None, "\"Name\"", None), name);
+    //     assert_eq!(
+    //         Some(Identifier::Quoted("myId".to_string().into())),
+    //         name.keyspace
+    //     );
+    //     assert_eq!(Identifier::Quoted("Name".to_string().into()), name.name);
+    // }
 }
