@@ -928,24 +928,6 @@ impl Display for Identifier {
     }
 }
 
-impl Default for Identifier {
-    fn default() -> Self {
-        Identifier::Unquoted("".to_string().into())
-    }
-}
-
-// impl From<&str> for Identifier {
-//     fn from(txt: &str) -> Self {
-//         Identifier::parse(txt, None)
-//     }
-// }
-
-// impl From<&String> for Identifier {
-//     fn from(txt: &String) -> Self {
-//         Identifier::parse(txt, None)
-//     }
-// }
-
 /// An alternative to [Identifier] that holds &str instead of String.
 /// Allows for allocationless comparison of [Identifier].
 #[derive(Debug)]
@@ -1105,47 +1087,4 @@ mod tests {
 
         assert_identifier_equality(&quote_in_quoted, &quote_in_unquoted);
     }
-
-    // #[test]
-    // pub fn test_fqname_parse() {
-    //     let name = FQName::parse("myid");
-    //     assert_eq!(FQName::simple("myid", None), name);
-
-    //     let name = FQName::parse("myId");
-    //     assert_eq!(FQName::simple("myId", None), name);
-    //     assert_eq!(Identifier::Unquoted("myId".to_string().into()), name.name);
-
-    //     let name = FQName::parse(r#""myId""#);
-    //     assert_eq!(FQName::simple("\"myId\"", None), name);
-    //     assert_eq!(Identifier::Quoted("myId".to_string().into()), name.name);
-
-    //     assert_eq!(
-    //         FQName::new("myid", None, "name", None),
-    //         FQName::parse("myid.name")
-    //     );
-
-    //     let name = FQName::parse("myId.Name");
-    //     assert_eq!(FQName::new("myId", None, "Name", None), name);
-    //     assert_eq!(
-    //         Some(Identifier::Unquoted("MyId".to_string().into())),
-    //         name.keyspace
-    //     );
-    //     assert_eq!(Identifier::Unquoted("Name".to_string().into()), name.name);
-
-    //     let name = FQName::parse("\"myId\".Name");
-    //     assert_eq!(FQName::new("\"myId\"", None, "Name", None), name);
-    //     assert_eq!(
-    //         Some(Identifier::Quoted("myId".to_string().into())),
-    //         name.keyspace
-    //     );
-    //     assert_eq!(Identifier::Unquoted("Name".to_string().into()), name.name);
-
-    //     let name = FQName::parse("\"myId\".\"Name\"");
-    //     assert_eq!(FQName::new("\"myId\"", None, "\"Name\"", None), name);
-    //     assert_eq!(
-    //         Some(Identifier::Quoted("myId".to_string().into())),
-    //         name.keyspace
-    //     );
-    //     assert_eq!(Identifier::Quoted("Name".to_string().into()), name.name);
-    // }
 }
